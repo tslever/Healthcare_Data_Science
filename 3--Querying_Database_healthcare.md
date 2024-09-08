@@ -52,6 +52,8 @@ FROM healthcare.dbo.patients
 |---|---|
 |1|88|
 
+The ages of the youngest and oldest patients are 1 and 88.
+
 
 4. How many patients got admitted to the hospital on 2023-03-18, and at what time was the latest admission that day? Note that the date column experienced a problem with nulls during import. See if you can figure out what happened. To resolve the issue, instead of `CAST`, use `TRY_CAST(NULLIF([Encounter_Admit_Date], 'null') AS DATE)`.
 
