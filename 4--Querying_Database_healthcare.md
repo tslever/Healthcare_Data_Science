@@ -132,3 +132,55 @@ Updated on 09/12/2024 by Tom Lever
         |SARWAL|Fluzone High-Dose Quadrivalent|1|
         |WENWES|Flublok Quadrivalent|3|
         |WENWES|Flucelvax Quadrivalent|2|
+
+2. We consider a patient to be an active patient if they had two or more encounters. How many active patients are in each of the following age groups?
+
+    |Name|Minimum Age (years)|Maximum Age (years)|
+    |---|---|---|
+    |Age Group 1|0|17|
+    |Age Group 2|18|64|
+    |Age Group 3|65|infinity|
+
+    ```
+    WITH
+
+        Table_Of_Keys_Of_Active_Patients AS (
+            SELECT Patient_Key
+            FROM encounters
+            GROUP BY Patient_Key
+            HAVING COUNT(Encounter_Key) >= 2
+        ),
+
+        Table_Of_Keys_And_Ages_Of_Active_Patients AS (
+            SELECT
+                Table_Of_Keys_Of_Active_Patients.Patient_Key,
+                DATEDIFF(day, Patient_Birth_Date, GETDATE()) / 365.25 AS Age
+            FROM Table_Of_Keys_Of_Active_Patients
+            JOIN patients
+            ON Table_Of_Keys_Of_Active_Patients.Patient_Key = patients.Patient_Key
+        ),
+
+        Table_Of_Keys_And_Age_Groups_Of_Active_Patients AS (
+            SELECT
+                Patient_Key,
+                CASE
+                    WHEN Age >= 0 AND AGE < 18 THEN 'Age Group 1'
+                    WHEN Age >= 18 AND Age < 65 THEN 'Age Group 2'
+                    WHEN Age >= 65 THEN 'Age Group 3'
+                END AS Age_Group
+            FROM Table_Of_Keys_And_Ages_Of_Active_Patients
+        )
+
+    SELECT
+        Age_Group,
+        COUNT(Patient_Key) AS Number_Of_Active_Patients
+    FROM Table_Of_Keys_And_Age_Groups_Of_Active_Patients
+    GROUP BY Age_Group;
+    ```
+
+    |Age_Group|Number_Of_Active_Patients|
+    |---|---|
+    |Age Group 1|6|
+    |Age Group 2|45|
+    |Age Group 3|18|
+
