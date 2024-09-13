@@ -26,28 +26,28 @@ Updated on 09/12/2024 by Tom Lever
     
     a.  How many total patients are there per provider (PCP, primary care provider) at your department?
 
-        Assume that providers MATGRE, WENWES, CARRHE, and SARWAL are all Primary Care Providers associated with department with department key 21 and department name "MEDICAL ASSOCIATES".
-        
-        ```
-        SELECT
-            Provider_Key,
-            Provider_Name,
-            COUNT(Patient_Key) AS Count_Of_Patients
-        FROM providers
-        LEFT JOIN patients
-        ON PCP_Provider_Key = Provider_Key
-        WHERE Provider_Department_Key = 21
-        GROUP BY
-            Provider_Key,
-            Provider_Name;
-        ```
-        
-        |Provider_Key|Provider_Name|Count_Of_Patients|
-        |---|---|---|
-        |605|CARRHE|4|
-        |360|MATGRE|6|
-        |606|SARWAL|1|
-        |378|WENWES|5|
+    Assume that providers MATGRE, WENWES, CARRHE, and SARWAL are all Primary Care Providers associated with department with department key 21 and department name "MEDICAL ASSOCIATES".
+    
+    ```
+    SELECT
+        Provider_Key,
+        Provider_Name,
+        COUNT(Patient_Key) AS Count_Of_Patients
+    FROM providers
+    LEFT JOIN patients
+    ON PCP_Provider_Key = Provider_Key
+    WHERE Provider_Department_Key = 21
+    GROUP BY
+        Provider_Key,
+        Provider_Name;
+    ```
+    
+    |Provider_Key|Provider_Name|Count_Of_Patients|
+    |---|---|---|
+    |605|CARRHE|4|
+    |360|MATGRE|6|
+    |606|SARWAL|1|
+    |378|WENWES|5|
     
     b.  A different flu shot is needed depending on age:
         
