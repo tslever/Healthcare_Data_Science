@@ -1,7 +1,4 @@
-import sqlite3
-
-connection = sqlite3.connect("database.db")
-cursor = connection.cursor()
+from determine_count import determine_count
 
 query = '''
 SELECT COUNT(*)
@@ -10,7 +7,7 @@ FROM (
     FROM diagnoses_icd
 );
 '''
-cursor.execute(query)
-result = cursor.fetchone()
-print(f"Count of distinct pairs of ICD codes and ICD versions: {result[0]}") # 28,583
-connection.close()
+
+count = determine_count(query = query)
+
+print(f"Count of distinct pairs of ICD codes and ICD versions: {count}") # 28,583
