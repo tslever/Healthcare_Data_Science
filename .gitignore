@@ -1,3 +1,4 @@
+.DS_Store
 Project/*.csv
 Project/__pycache__
 Project/database.db
