@@ -1,4 +1,7 @@
+import numpy as np
 import pandas as pd
+
+from sklearn.base import BaseEstimator, ClassifierMixin
 
 # Import a class representing Random Forest binary classifier machine learning models.
 from sklearn.ensemble import RandomForestClassifier
@@ -35,8 +38,68 @@ X_train_scaled = scaler.fit_transform(X_train)
 # Transform the test data in addition to the training data.
 X_test_scaled = scaler.transform(X_test)
 
+# Define a custom classifier with threshold that wraps around RandomForestClassifier
+# and includes threshold as a hyperparameter.
+class RFWithThreshold(BaseEstimator, ClassifierMixin):
+    def __init__(
+        self,
+        n_estimators=100,
+        max_depth=None,
+        min_samples_split=2,
+        min_samples_leaf=1,
+        threshold=0.5,
+        random_state=42,
+    ):
+        self.n_estimators = n_estimators
+        self.max_depth = max_depth
+        self.min_samples_split = min_samples_split
+        self.min_samples_leaf = min_samples_leaf
+        self.threshold = threshold
+        self.random_state = random_state
+        self.model = RandomForestClassifier(
+            n_estimators=self.n_estimators,
+            max_depth=self.max_depth,
+            min_samples_split=self.min_samples_split,
+            min_samples_leaf=self.min_samples_leaf,
+            random_state=self.random_state,
+        )
+
+    def fit(self, X, y):
+        self.model.fit(X, y)
+        self.classes_ = self.model.classes_
+        return self
+
+    def predict(self, X):
+        probas = self.model.predict_proba(X)[:, 1]
+        return (probas >= self.threshold).astype(int)
+
+    def predict_proba(self, X):
+        return self.model.predict_proba(X)
+
+    def get_params(self, deep=True):
+        return {
+            'n_estimators': self.n_estimators,
+            'max_depth': self.max_depth,
+            'min_samples_split': self.min_samples_split,
+            'min_samples_leaf': self.min_samples_leaf,
+            'threshold': self.threshold,
+            'random_state': self.random_state,
+        }
+
+    def set_params(self, **params):
+        for key, value in params.items():
+            setattr(self, key, value)
+        self.model = RandomForestClassifier(
+            n_estimators=self.n_estimators,
+            max_depth=self.max_depth,
+            min_samples_split=self.min_samples_split,
+            min_samples_leaf=self.min_samples_leaf,
+            random_state=self.random_state,
+        )
+        return self
+
 # Create the base model
-rf = RandomForestClassifier(random_state=42)
+rf = RFWithThreshold(random_state=42)
 
 # Define the parameter grid for GridSearchCV
 param_grid = {
@@ -44,6 +107,7 @@ param_grid = {
     'max_depth': [None, 5, 10], # maximum depth of each tree. None means there is no limit on the depth of a tree.
     'min_samples_split': [2, 5], # minimum number of samples required to split an internal node
     'min_samples_leaf': [1, 2], # minimum number of samples required to be at a leaf node
+    'threshold': [0.4, 0.5, 0.6] # binary classification thresholds
 }
 
 # Instantiate the grid search model
@@ -60,10 +124,10 @@ grid_search = GridSearchCV(
 # to find the best performing model.
 # Example output:
 
-# Fitting 5 folds for each of 24 candidates, totalling 120 fits
-# [CV] END max_depth=None, min_samples_leaf=1, min_samples_split=2, n_estimators=100; total time=   7.8s
+# Fitting 5 folds for each of 72 candidates, totalling 360 fits
+# [CV] END max_depth=None, min_samples_leaf=1, min_samples_split=2, n_estimators=100, threshold=0.5; total time=   7.8s
 # ...
-# [CV] END max_depth=10, min_samples_leaf=2, min_samples_split=5, n_estimators=200; total time=   6.9s
+# [CV] END max_depth=10, min_samples_leaf=2, min_samples_split=5, n_estimators=200, threshold=0.6; total time=   9.6s
 
 # For this output, GridSearchCV tests 24 combinations of hyperparameters from the parameter grid
 # using 5-fold cross validation, resulting in 120 fits.
@@ -72,7 +136,7 @@ grid_search.fit(X_train_scaled, y_train)
 
 # Example output:
 
-# Best parameters found: {'max_depth': None, 'min_samples_leaf': 2, 'min_samples_split': 5, 'n_estimators': 200}
+# Best parameters found: {'max_depth': 10, 'min_samples_leaf': 1, 'min_samples_split': 5, 'n_estimators': 200, 'threshold': 0.6}
 print('Best parameters found:', grid_search.best_params_)
 
 # Use the best estimator with the best hyperparameters.
@@ -84,8 +148,8 @@ cv_scores = cross_val_score(best_rf, X_train_scaled, y_train, cv=5, scoring='acc
 
 # Example output:
 
-# Cross-validation scores with best estimator: [0.89852454 0.8976212  0.89811283 0.89761092 0.89821321]
-# Mean cross-validation score: 0.8980165399369758
+# Cross-validation scores with best estimator: [0.89942788 0.8983238  0.89831359 0.8972094  0.89911664]
+# Mean cross-validation score: 0.8984782623633564
 
 # The scores across folds are very similar, indicating stable performance.
 # There is approximately 89.8 percent accuracy on the training data.
@@ -104,17 +168,19 @@ y_pred = best_rf.predict(X_test_scaled)
 # Support is the number of occurrences of each class in the test data.
 # Example output:
 
-# Accuracy on test data: 0.8897454428651731
+# Accuracy on test data: 0.8903075564121096
 # Classification report:
 #               precision    recall  f1-score   support
 # 
-#            0       0.53      0.01      0.01      1374
+#            0       0.67      0.01      0.02      1374
 #            1       0.89      1.00      0.94     11079
 # 
 #     accuracy                           0.89     12453
-#    macro avg       0.71      0.50      0.48     12453
-# weighted avg       0.85      0.89      0.84     12453
+#    macro avg       0.78      0.51      0.48     12453
+# weighted avg       0.87      0.89      0.84     12453
 
+# The best model in this version has equal or higher performance metrics than the previous version.
+# See history at https://github.com/tslever/Healthcare_Data_Science/commits/main/8--Binary_Classifier/8--Binary_Classifier.py .
 # The model achieves 89.0 percent accuracy on the test data set of unseen data.
 # This accuracy is misleading.
 # This accuracy is due to the model's ability to predict correctly that patients are alive after 1 year.
@@ -126,25 +192,25 @@ y_pred = best_rf.predict(X_test_scaled)
 # The data set is highly imbalanced.
 # The model is biased toward the majority status of being alive after 1 year.
 # The model predicts nearly all patients as being alive after 1 year.
-# 53 percent of patients predicted to be not alive are actually not alive.
+# 67 percent of patients predicted to be not alive are actually not alive.
 # 89 percent of patients predicted to be alive are actually alive.
 # 1 percent of patients actually not alive were predicted to be not alive.
 # 100 percent of patients actually alive were predicted to be alive.
-# An F1 score of 0.01 indicates that the model performed very poorly in identifying patients who are not alive.
+# An F1 score of 0.02 indicates that the model performed very poorly in identifying patients who are not alive.
 # An F1 score of 0.94 indicates that the model performed very well in identifying patients who are alive.
 # Accuracy on the test data set is repeated.
-# 0.71 is the average of 0.53 and 0.89.
-# 0.71 may also be the proportion of patients predicted to have a certain status that actually have that status.
-# 0.50 is the average of 0.01 and 1.00.
-# 0.50 may also be the proportion of patients actually having a status that were predicted to have that status.
-# 0.48 is the average of 0.01 and 0.94.
-# 0.85 is the average of 0.53 and 0.89 weighted by the number of patients with each status.
-# 0.85 may also be the weighted proportion of patients
+# 0.78 is the average of 0.67 and 0.89.
+# 0.78 may also be the proportion of patients predicted to have a certain status that actually have that status.
+# 0.51 is the average of 0.01 and 1.00.
+# 0.51 may also be the proportion of patients actually having a status that were predicted to have that status.
+# 0.48 is the average of 0.02 and 0.94.
+# 0.87 is the average of 0.67 and 0.89 weighted by the number of patients with each status.
+# 0.87 may also be the weighted proportion of patients
 # predicted to have a certain status that actually have that status.
 # 0.89 is the average of 0.01 and 1.00 weighted by the number of patients with each status.
 # 0.89 may also be the weighted proportion of patients
 # actually having a status that were predicted to have that status.
-# 0.84 is the average of 0.01 and 0.94 weighted by the number of patients with each status.
+# 0.84 is the average of 0.02 and 0.94 weighted by the number of patients with each status.
 
 # We might increase the number of patients in our data set who are actually not alive after 1 year.
 # We might use SMOTE.
@@ -153,7 +219,7 @@ y_pred = best_rf.predict(X_test_scaled)
 # than misclassifications of patients who are alive.
 # We might add property "class_weight='balanced'" to the constructor of RandomForestClassifier.
 # We might consider a Precision-Recall Curve or an ROC Curve and/or the areas under these curves.
-# We might consider including classification threshold as a hyperparameter in param_grid.
+# We might consider including thresholds 0.01, 0.02, ..., 1.00.
 # We might consider choosing only those features that contribute most to predictions.
 # We might add features or transform features.
 # We might use models that handle class imbalance better (e.g., Gradient Boosting Machines).
