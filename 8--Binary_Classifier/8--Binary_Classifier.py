@@ -1,4 +1,11 @@
-import numpy as np
+# We find a best Random Forest Binary Classifier
+# by comparing 360 models according to average accuracy during cross validation.
+# Each model differs from each other model in its combination of hyperparameters.
+# We evaluate the accuracies of the best model during cross validation.
+# We evaluate performance metrics of the best model during testing,
+# including accuracy and F1 score.
+
+
 import pandas as pd
 
 from sklearn.base import BaseEstimator, ClassifierMixin
