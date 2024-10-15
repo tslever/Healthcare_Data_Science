@@ -1,4 +1,6 @@
 .DS_Store
+8--Binary_Classifier/HeartFailureData.csv
+8--Binary_Classifier/env
 Project/*.csv
 Project/__pycache__
 Project/database.db
