@@ -1,6 +1,7 @@
 # Train the Cox-CC method.
 # The Cox-CC method is a continuous time method.
 # Use the METABRIC data set.
+# The source for the code is https://nbviewer.org/github/havakv/pycox/blob/master/examples/cox-cc.ipynb .
 
 
 import numpy as np
