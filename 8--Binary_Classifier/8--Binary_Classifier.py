@@ -5,6 +5,15 @@
 # We evaluate performance metrics of the best model during testing,
 # including accuracy and F1 score.
 
+# {
+#     "ml_method": "Random Forest Classifier",
+#     "training/testing regime": "80/20 split, imbalanced data set, with 5-fold cross-validation",
+#     "performance metrics": {
+#         "accuracy": "0.89",
+#         "F1-score": "0.48"
+#     }
+# }
+
 
 import pandas as pd
 
