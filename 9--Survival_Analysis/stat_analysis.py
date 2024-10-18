@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
@@ -67,12 +68,6 @@ y_test = Surv.from_arrays(event=LOS_test_df['status'] == 1, time=LOS_test_df['re
 # Separate categorical and numerical variables
 numerical_vars = [var for var in predictor_names if var not in categorical_vars]
 
-# Save the training and testing data frames to CSV files
-#train_data = LOS_train_df[predictor_names + ['response', 'status']]
-#test_data = LOS_test_df[predictor_names + ['response', 'status']]
-#train_data.to_csv('LOS_train_data.csv', index=False)
-#test_data.to_csv('LOS_test_data.csv', index=False)
-
 # Preprocessing
 preprocessor = ColumnTransformer(
     transformers=[
@@ -92,12 +87,43 @@ model.fit(LOS_train_df[predictor_names], y_train)
 # Predict on test data
 pred_surv = model.predict_survival_function(LOS_test_df[predictor_names])
 
+# Define a common time grid
+t_min = min(fn.x[0] for fn in pred_surv)
+t_max = max(fn.x[-1] for fn in pred_surv)
+t_grid = np.linspace(t_min, t_max, 100)
+
 # Plot survival functions
 plt.figure(figsize=(10, 6))
 for fn in pred_surv:
-    plt.step(fn.x, fn.y, where="post", alpha=0.2)
+    surv_y_interp = np.interp(t_grid, fn.x, fn.y)
+    plt.step(t_grid, surv_y_interp, where="post", alpha=0.2)
 
 plt.xlabel("Time (days)")
 plt.ylabel("Probability of no discharge")
 plt.title("Survival Curves for Test Data")
+plt.show()
+
+# Plot cumulative incidence functions (Probability of discharge)
+plt.figure(figsize=(10, 6))
+for fn in pred_surv:
+    ci_y = 1 - fn.y  # Compute 1 minus the survival probabilities
+    ci_y_interp = np.interp(t_grid, fn.x, ci_y)
+    plt.step(t_grid, ci_y_interp, where="post", alpha=0.2)
+
+plt.xlabel("Time (days)")
+plt.ylabel("Probability of discharge")
+plt.title("Probability of Discharge vs Time (days)")
+plt.show()
+
+# Plot derivative of cumulative incidence functions
+plt.figure(figsize=(10, 6))
+for fn in pred_surv:
+    ci_y = 1 - fn.y  # Compute cumulative incidence function
+    ci_y_interp = np.interp(t_grid, fn.x, ci_y)
+    derivative = np.gradient(ci_y_interp, t_grid)
+    plt.plot(t_grid, derivative, alpha=0.2)
+
+plt.xlabel("Time (days)")
+plt.ylabel("Derivative of Probability of discharge")
+plt.title("Derivative of Probability of Discharge vs Time (days)")
 plt.show()
