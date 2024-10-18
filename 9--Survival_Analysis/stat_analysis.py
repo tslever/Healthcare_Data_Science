@@ -98,6 +98,6 @@ for fn in pred_surv:
     plt.step(fn.x, fn.y, where="post", alpha=0.2)
 
 plt.xlabel("Time (days)")
-plt.ylabel("Probability of no discharge (%)")
+plt.ylabel("Probability of no discharge")
 plt.title("Survival Curves for Test Data")
 plt.show()
