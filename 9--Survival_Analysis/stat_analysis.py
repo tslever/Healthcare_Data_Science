@@ -67,6 +67,12 @@ y_test = Surv.from_arrays(event=LOS_test_df['status'] == 1, time=LOS_test_df['re
 # Separate categorical and numerical variables
 numerical_vars = [var for var in predictor_names if var not in categorical_vars]
 
+# Save the training and testing data frames to CSV files
+#train_data = LOS_train_df[predictor_names + ['response', 'status']]
+#test_data = LOS_test_df[predictor_names + ['response', 'status']]
+#train_data.to_csv('LOS_train_data.csv', index=False)
+#test_data.to_csv('LOS_test_data.csv', index=False)
+
 # Preprocessing
 preprocessor = ColumnTransformer(
     transformers=[
