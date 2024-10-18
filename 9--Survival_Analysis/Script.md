@@ -33,8 +33,19 @@ Length Of Stay is "the cumulative duration of patient hospitalization" from firs
 We consider a dataset based on GitHub repository `COVID.LOS.prep` [2] of information relating to patients. Columns SEX and ETHNICITY contains strings. Column AGE and BMI1 through BMI5 contains floats. Columns BP_DIASTOLIC1 through BP_DIASTOLIC5, BP_SYSTOLIC1 through BP_SYSTOLIC5, PULSE1 through PULSE5, PULSE.OXIMETRY1 through PULSE.OXIMETRY5, and RESPIRATIONS1 through RESPIRATIONS5 contain integers. Column TEMPERATURE1 through TEMPERATURE5 contain floats. Columns corresponding to the 20 most common diagnoses contain booleans. Column duration contains floats. Column patient_was_discharged contains 1s.
 
 
+# Calculating LOS Probability Density Function
+
+GitHub repository `COVID.LOS.prep` provides R file `stat.analysis.R` that plots the Survival Function for each patient as "Probability of no discharge vs. time (days)". "time (days)" is Length Of Stay. I converted this R file to a Python file. I plotted not only the Survival Functions but also the Cumulative Distribution Functions and the Probability Density Distribution Functions. We can predict Length Of Stay as the expected value of the Probability Density Distribution while having a sense of all likely values.
+
+This concludes this short video.
+
+
 ## References
+
+I would like to acknowledge the authors and ChatGPT.
 
 1. Wen et al. (2022). "Time-to-event modeling for hospital length of stay prediction for COVID-19 patients". Machine Learning with Applications. Volume 9. Jun 18, 2022. Accessed on 10/17/2024 via https://pmc.ncbi.nlm.nih.gov/articles/PMC9213016/pdf/main.pdf .
 
 2. Michael Pokojovy (2022). "COVID.LOS.prep". Accessed on 10/18/2024 via https://github.com/tslever/COVID.LOS.prep .
+
+3. OpenAI (2024). "ChatGPT". Accessed on 10/18/2024 via https://chatgpt.com/ .
