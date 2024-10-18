@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
@@ -17,11 +16,13 @@ vital_names_x5 = [f"{vital_name}{ind}" for vital_name in vital_names for ind in 
 
 # Convert appropriate columns to numeric
 numeric_cols = ['AGE', 'LOS_30D'] + vital_names_x5
-for col in numeric_cols:
-    if col in LOS_train_df.columns:
-        LOS_train_df[col] = pd.to_numeric(LOS_train_df[col], errors='coerce')
-    if col in LOS_test_df.columns:
-        LOS_test_df[col] = pd.to_numeric(LOS_test_df[col], errors='coerce')
+
+# Ensure the columns exist before converting
+numeric_cols_train = [col for col in numeric_cols if col in LOS_train_df.columns]
+numeric_cols_test = [col for col in numeric_cols if col in LOS_test_df.columns]
+
+LOS_train_df[numeric_cols_train] = LOS_train_df[numeric_cols_train].apply(pd.to_numeric, errors='coerce')
+LOS_test_df[numeric_cols_test] = LOS_test_df[numeric_cols_test].apply(pd.to_numeric, errors='coerce')
 
 # Get ICD10 names
 columns = LOS_train_df.columns.tolist()
@@ -29,29 +30,30 @@ vital_indices = [columns.index(name) for name in vital_names_x5 if name in colum
 max_vital_index = max(vital_indices) if vital_indices else -1
 ICD10_names = columns[max_vital_index+1:]
 
-# Convert 'TRUE'/'FALSE' strings to integers 1/0 in ICD10 columns
-LOS_train_df[ICD10_names] = LOS_train_df[ICD10_names].replace({'TRUE': 1, 'FALSE': 0}).astype(int)
-LOS_test_df[ICD10_names] = LOS_test_df[ICD10_names].replace({'TRUE': 1, 'FALSE': 0}).astype(int)
+# Convert 'TRUE'/'FALSE' strings to integers in ICD10 columns
+LOS_train_df[ICD10_names] = (LOS_train_df[ICD10_names] == 'TRUE').astype(int)
+LOS_test_df[ICD10_names] = (LOS_test_df[ICD10_names] == 'TRUE').astype(int)
 
 # Compute frequencies
 freqs = LOS_train_df[ICD10_names].sum()
 ICD10_top20_names = freqs.sort_values(ascending=False).head(20).index.tolist()
 
 # Convert ICD10 codes to categorical
-for ICD10_name in ICD10_top20_names:
-    LOS_train_df[ICD10_name] = LOS_train_df[ICD10_name].astype('category')
-    LOS_test_df[ICD10_name] = LOS_test_df[ICD10_name].astype('category')
+LOS_train_df[ICD10_top20_names] = LOS_train_df[ICD10_top20_names].astype('category')
+LOS_test_df[ICD10_top20_names] = LOS_test_df[ICD10_top20_names].astype('category')
 
 # All predictors
 predictor_names = ["SEX", "ETHNICITY", "AGE"] + vital_names_x5 + ICD10_top20_names
 
 # Convert SEX and ETHNICITY to categorical
-LOS_train_df["SEX"] = LOS_train_df["SEX"].astype('category')
-LOS_test_df["SEX"] = LOS_test_df["SEX"].astype('category')
-LOS_train_df["ETHNICITY"] = LOS_train_df["ETHNICITY"].astype('category')
-LOS_test_df["ETHNICITY"] = LOS_test_df["ETHNICITY"].astype('category')
+categorical_vars = ["SEX", "ETHNICITY"] + ICD10_top20_names
+LOS_train_df[categorical_vars] = LOS_train_df[categorical_vars].astype('category')
+LOS_test_df[categorical_vars] = LOS_test_df[categorical_vars].astype('category')
 
 # Prepare response and status
+LOS_train_df = LOS_train_df.copy()
+LOS_test_df = LOS_test_df.copy()
+
 LOS_train_df['response'] = LOS_train_df['LOS_30D'].astype(float)
 LOS_test_df['response'] = LOS_test_df['LOS_30D'].astype(float)
 
@@ -63,7 +65,6 @@ y_train = Surv.from_arrays(event=LOS_train_df['status'] == 1, time=LOS_train_df[
 y_test = Surv.from_arrays(event=LOS_test_df['status'] == 1, time=LOS_test_df['response'])
 
 # Separate categorical and numerical variables
-categorical_vars = ["SEX", "ETHNICITY"] + ICD10_top20_names
 numerical_vars = [var for var in predictor_names if var not in categorical_vars]
 
 # Preprocessing
