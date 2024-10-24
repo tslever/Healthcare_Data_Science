@@ -1,6 +1,6 @@
 import pandas as pd
 
-data_frame = pd.read_csv("Table_Of_IDs_Of_Hospitalizations_DRG_Info_And_Medication_Regimes.csv")
+data_frame = pd.read_csv("Table_Of_IDs_Of_Hospitalizations_Indicators_Of_Death_DRG_Info_And_Medication_Regimes.csv")
 
 def aggregate_data(group):
     treatments = ', '.join(f"{row['drg_type']} {row['drg_code']}" for _, row in group.iterrows())

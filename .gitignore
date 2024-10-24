@@ -1,4 +1,5 @@
 .DS_Store
+6--Dashboard_For_Project_For_Healthcare_Data_Science.twbx
 8--Binary_Classifier/HeartFailureData.csv
 8--Binary_Classifier/env
 9--Survival_Analysis/env
@@ -6,3 +7,4 @@ Project/*.csv
 Project/__pycache__
 Project/database.db
 Project/env
+Project/mimic-iv-3.0

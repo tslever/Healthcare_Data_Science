@@ -73,7 +73,7 @@ def add_to_database(table_from_file: str) -> None:
     data_frame = pd.read_csv(table_from_file)
     data_frame.to_sql(filename, connection, if_exists = "replace", index = False)
 
-files_with_tables = ["admissions.csv", "diagnoses_icd.csv", "drgcodes.csv", "emar.csv"]
+files_with_tables = ["mimic-iv-3.0/hosp/admissions.csv", "mimic-iv-3.0/hosp/diagnoses_icd.csv", "mimic-iv-3.0/hosp/drgcodes.csv", "mimic-iv-3.0/hosp/emar.csv"]
 for file_with_table in files_with_tables:
     add_to_database(table_from_file = file_with_table)
 
