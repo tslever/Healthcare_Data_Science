@@ -24,7 +24,9 @@ table_icustays = pd.read_csv(
     dtype = {"subject_id": int, "hadm_id": int, "stay_id": int, "los": float}
 )
 subtable_of_icustays_with_LOSs = table_icustays[~table_icustays["los"].isnull()]
-table_of_subject_hadm_and_stay_ids_and_LOSs = subtable_of_icustays_with_LOSs[["stay_id", "los"]]
+table_of_subject_hadm_and_stay_ids_and_LOSs = subtable_of_icustays_with_LOSs[
+    ["subject_id", "hadm_id", "stay_id", "los"]
+]
 
 table_of_subject_hadm_stay_and_vital_ids_LOSs_values_and_uoms = \
     table_of_subject_hadm_and_stay_ids_and_LOSs.merge(
