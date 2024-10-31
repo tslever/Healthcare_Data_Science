@@ -9,7 +9,7 @@ subtable_of_table_omr = pd.read_csv(
 )
 
 table_of_subject_ids_chartdates_result_name_re_BMI_and_result_value = subtable_of_table_omr[
-    (subtable_of_table_omr["subject_id"]) &
+    (subtable_of_table_omr["subject_id"].notna()) &
     (subtable_of_table_omr["chartdate"].notna()) &
     (subtable_of_table_omr["result_name"] == "BMI (kg/m2)") &
     (subtable_of_table_omr["result_value"].notna())
