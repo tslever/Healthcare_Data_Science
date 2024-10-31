@@ -15,7 +15,8 @@ table_of_subject_hadm_stay_and_vital_ids_LOSs_values_and_uoms["itemid"] = \
 
 table_drgcodes = pd.read_csv(
     filepath_or_buffer = "mimic-iv-3.0/hosp/drgcodes.csv",
-    dtype = {"subject_id": int, "hadm_id": int, "drg_type": str, "drg_code": str}
+    usecols = ["hadm_id", "drg_type", "drg_code"],
+    dtype = {"hadm_id": int, "drg_type": str, "drg_code": str}
 )
 
 table_of_subject_hadm_stay_and_vital_ids_LOSs_values_uoms_and_drg_types_and_codes = table_of_subject_hadm_stay_and_vital_ids_LOSs_values_and_uoms.merge(
