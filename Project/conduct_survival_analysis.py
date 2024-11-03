@@ -127,7 +127,6 @@ for step_function in list_of_step_functions:
         ndarray_of_interpolated_CDF_values,
         ndarray_of_linearly_spaced_LOSs
     )
-    ndarray_of_PDF_values = np.maximum(ndarray_of_PDF_values, 0)
     predicted_expected_LOS = np.trapz(
         ndarray_of_linearly_spaced_LOSs * ndarray_of_PDF_values,
         ndarray_of_linearly_spaced_LOSs
