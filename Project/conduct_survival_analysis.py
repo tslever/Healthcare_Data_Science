@@ -8,117 +8,181 @@ from sksurv.util import Surv
 import matplotlib.pyplot as plt
 
 
-df = pd.read_csv(
+data_frame = pd.read_csv(
     filepath_or_buffer = "table_of_subject_ids_hadm_ids_stay_ids_LOSs_vital_statistics_disease_indicators_and_demographics.csv",
     dtype = {
         "subject_id": int,
         "hadm_id": int,
         "stay_id": int,
         "los": float,
+        # 7 groups of columns of vital statistics with 5 columns of vital statistics per group,
+        # 20 columns of indicators of whether or not stay is associated with one of the 20 most common diseases,
         "gender": int,
         "anchor_age": int,
         "race": int
     }
 )
+data_frame_for_training = data_frame.sample(frac = 0.8, random_state = 0)
+data_frame_for_testing = data_frame.drop(data_frame_for_training.index)
 
-# Set the random state for reproducibility
-LOS_train_df = df.sample(frac = 0.8, random_state = 0)
-LOS_test_df = df.drop(LOS_train_df.index)
+list_of_names_of_all_columns = data_frame_for_training.columns.tolist()
+list_of_names_of_ids_and_response = ['subject_id', 'hadm_id', 'stay_id', 'los']
+list_of_names_of_predictors = [
+    name_of_column for name_of_column in list_of_names_of_all_columns
+    if name_of_column not in list_of_names_of_ids_and_response
+]
 
-# Exclude ID and response columns
-exclude_cols = ['subject_id', 'hadm_id', 'stay_id', 'los']
-columns = LOS_train_df.columns.tolist()
-predictor_names = [col for col in columns if col not in exclude_cols]
+list_of_names_of_numerical_predictors = [
+    name_of_column for name_of_column in list_of_names_of_predictors
+    if
+        name_of_column.startswith('minimum_') or
+        name_of_column.startswith('first_quartile_') or
+        name_of_column.startswith('median_') or
+        name_of_column.startswith('third_quartile_') or
+        name_of_column.startswith('maximum_') or
+        name_of_column == 'anchor_age'
+]
 
-# Define numerical and categorical variables
-numerical_vars = [col for col in predictor_names if
-                  col.startswith('minimum_') or
-                  col.startswith('first_quartile_') or
-                  col.startswith('median_') or
-                  col.startswith('third_quartile_') or
-                  col.startswith('maximum_') or
-                  col == 'anchor_age']
+list_of_names_of_categorical_predictors = [
+    name_of_column for name_of_column in list_of_names_of_predictors
+    if
+        name_of_column.startswith('APR_') or
+        name_of_column.startswith('HCFA_') or
+        name_of_column == "gender" or
+        name_of_column == "race"
+]
 
-categorical_vars = ['gender', 'race'] + [col for col in predictor_names if col.startswith('APR_') or col.startswith('HCFA_')]
+assert set(list_of_names_of_numerical_predictors + list_of_names_of_categorical_predictors) == set(list_of_names_of_predictors), "Mismatch in predictor variables"
 
-# Ensure all predictor names are included
-assert set(numerical_vars + categorical_vars) == set(predictor_names), "Mismatch in predictor variables"
+data_frame_for_training[list_of_names_of_numerical_predictors] = data_frame_for_training[list_of_names_of_numerical_predictors].apply(pd.to_numeric, errors = "raise")
+data_frame_for_testing[list_of_names_of_numerical_predictors] = data_frame_for_testing[list_of_names_of_numerical_predictors].apply(pd.to_numeric, errors = "raise")
 
-# Convert appropriate columns to numeric
-LOS_train_df[numerical_vars] = LOS_train_df[numerical_vars].apply(pd.to_numeric, errors='coerce')
-LOS_test_df[numerical_vars] = LOS_test_df[numerical_vars].apply(pd.to_numeric, errors='coerce')
+data_frame_for_training[list_of_names_of_categorical_predictors] = data_frame_for_training[list_of_names_of_categorical_predictors].astype('category')
+data_frame_for_testing[list_of_names_of_categorical_predictors] = data_frame_for_testing[list_of_names_of_categorical_predictors].astype('category')
 
-# Convert categorical variables to 'category' dtype
-LOS_train_df[categorical_vars] = LOS_train_df[categorical_vars].astype('category')
-LOS_test_df[categorical_vars] = LOS_test_df[categorical_vars].astype('category')
+data_frame_for_training['response'] = data_frame_for_training['los'].astype(float)
+data_frame_for_testing['response'] = data_frame_for_testing['los'].astype(float)
 
-# Prepare response and status
-LOS_train_df['response'] = LOS_train_df['los'].astype(float)
-LOS_test_df['response'] = LOS_test_df['los'].astype(float)
+data_frame_for_training['status'] = 1
+data_frame_for_testing['status'] = 1
 
-LOS_train_df['status'] = 1
-LOS_test_df['status'] = 1
+nd_array_of_tuples_of_true_event_indicators_and_LOSs_for_training = Surv.from_arrays(event = data_frame_for_training['status'] == 1, time=data_frame_for_training['response'])
+nd_array_of_tuples_of_true_event_indicators_and_LOSs_for_testing = Surv.from_arrays(event = data_frame_for_testing['status'] == 1, time=data_frame_for_testing['response'])
 
-# Prepare target variable
-y_train = Surv.from_arrays(event=LOS_train_df['status'] == 1, time=LOS_train_df['response'])
-y_test = Surv.from_arrays(event=LOS_test_df['status'] == 1, time=LOS_test_df['response'])
-
-# Preprocessing
-preprocessor = ColumnTransformer(
-    transformers=[
-        ('num', StandardScaler(), numerical_vars),
-        ('cat', OneHotEncoder(sparse_output=False, handle_unknown='ignore'), categorical_vars)
+column_transformer = ColumnTransformer(
+    transformers = [
+        ('transformer_of_columns_with_numerical_values', StandardScaler(), list_of_names_of_numerical_predictors),
+        ('transformer_of_columns_with_categorical_values', OneHotEncoder(sparse_output = False, handle_unknown = 'ignore'), list_of_names_of_categorical_predictors)
     ])
 
-# Pipeline with Random Survival Forest
-model = Pipeline([
-    ('preprocessor', preprocessor),
-    ('classifier', RandomSurvivalForest(n_estimators=100, min_samples_split=10, random_state=0))
-])
+pipeline = Pipeline(
+    steps = [
+        ('step_transform_columns', column_transformer),
+        (
+            'step_classify',
+            RandomSurvivalForest(
+                n_estimators = 100,
+                min_samples_split = 10,
+                random_state = 0
+            )
+        )
+    ]
+)
 
-# Fit the model
-model.fit(LOS_train_df[predictor_names], y_train)
+pipeline.fit(
+    X = data_frame_for_training[list_of_names_of_predictors],
+    y = nd_array_of_tuples_of_true_event_indicators_and_LOSs_for_training
+)
 
-# Predict on test data
-pred_surv = model.predict_survival_function(LOS_test_df[predictor_names])
+# There is one step function of the from f(z) = y_i, x_i <= z < x_{i+1}
+# for each row in the testing data set.
+list_of_step_functions = pipeline.predict_survival_function(
+    data_frame_for_testing[list_of_names_of_predictors]
+)
 
-# Define a common time grid
-t_min = min(fn.x[0] for fn in pred_surv)
-t_max = max(fn.x[-1] for fn in pred_surv)
-t_grid = np.linspace(t_min, t_max, 100)
+list_of_predicted_expected_LOSs = []
+for step_function in list_of_step_functions:
+    predicted_expected_LOS = np.trapz(step_function.y, step_function.x)
+    list_of_predicted_expected_LOSs.append(predicted_expected_LOS)
 
-# Plot survival functions
-plt.figure(figsize=(10, 6))
-for fn in pred_surv:
-    surv_y_interp = np.interp(t_grid, fn.x, fn.y)
-    plt.step(t_grid, surv_y_interp, where="post", alpha=0.2)
+data_frame_of_ids_and_actual_and_predicted_expected_LOSs = pd.DataFrame(
+    data = {
+        'subject_id': data_frame_for_testing['subject_id'].values,
+        'hadm_id': data_frame_for_testing['hadm_id'].values,
+        'stay_id': data_frame_for_testing['stay_id'].values,
+        'actual_los': data_frame_for_testing['los'].values,
+        'predicted_expected_los': list_of_predicted_expected_LOSs
+    }
+)
 
-plt.xlabel("Time (days)")
-plt.ylabel("Probability of no discharge")
-plt.title("Survival Curves for Test Data")
+data_frame_of_ids_and_actual_and_predicted_expected_LOSs.to_csv(
+    path_or_buf = 'data_frame_of_ids_and_actual_and_predicted_expected_LOSs.csv',
+    index = False
+)
+
+minimum_LOS = min(step_function.x[0] for step_function in list_of_step_functions)
+maximum_LOS = max(step_function.x[-1] for step_function in list_of_step_functions)
+ndarray_of_linearly_spaced_LOSs = np.linspace(
+    start = minimum_LOS,
+    stop = maximum_LOS,
+    num = 100
+)
+
+for step_function in list_of_step_functions:
+    ndarray_of_interpolated_survival_curve_values = np.interp(
+        x = ndarray_of_linearly_spaced_LOSs,
+        xp = step_function.x,
+        fp = step_function.y
+    )
+    plt.step(
+        x = ndarray_of_linearly_spaced_LOSs,
+        y = ndarray_of_interpolated_survival_curve_values,
+        where = "post",
+        alpha = 0.2
+    )
+
+plt.xlabel(xlabel = "Length Of Stay (days)")
+plt.ylabel(ylabel = "Survival Curve For Test Data")
+plt.title(label = "Survival Curves for Test Data")
 plt.show()
 
-# Plot cumulative incidence functions (Probability of discharge)
-plt.figure(figsize=(10, 6))
-for fn in pred_surv:
-    ci_y = 1 - fn.y  # Compute 1 minus the survival probabilities
-    ci_y_interp = np.interp(t_grid, fn.x, ci_y)
-    plt.step(t_grid, ci_y_interp, where="post", alpha=0.2)
+for step_function in list_of_step_functions:
+    ndarray_of_CDF_values = 1 - step_function.y
+    ndarray_of_interpolated_CDF_values = np.interp(
+        x = ndarray_of_linearly_spaced_LOSs,
+        xp = step_function.x,
+        fp = ndarray_of_CDF_values
+    )
+    plt.step(
+        x = ndarray_of_linearly_spaced_LOSs,
+        y = ndarray_of_interpolated_CDF_values,
+        where = "post",
+        alpha = 0.2
+    )
 
-plt.xlabel("Time (days)")
-plt.ylabel("Probability of discharge")
-plt.title("Probability of Discharge vs Time (days)")
+plt.xlabel(xlabel = "Length Of Stay (days)")
+plt.ylabel(ylabel = "Cumulative Distribution Function Of LOS")
+plt.title(label = "CDF Of LOS Vs. LOS")
 plt.show()
 
-# Plot derivative of cumulative incidence functions
-plt.figure(figsize=(10, 6))
-for fn in pred_surv:
-    ci_y = 1 - fn.y  # Compute cumulative incidence function
-    ci_y_interp = np.interp(t_grid, fn.x, ci_y)
-    derivative = np.gradient(ci_y_interp, t_grid)
-    plt.plot(t_grid, derivative, alpha=0.2)
+for step_function in list_of_step_functions:
+    ndarray_of_CDF_values = 1 - step_function.y
+    ndarray_of_interpolated_CDF_values = np.interp(
+        x = ndarray_of_linearly_spaced_LOSs,
+        xp = step_function.x,
+        fp = ndarray_of_CDF_values
+    )
+    ndarray_of_PDF_values = np.gradient(
+        ndarray_of_interpolated_CDF_values,
+        ndarray_of_linearly_spaced_LOSs
+    )
+    plt.plot(
+        ndarray_of_linearly_spaced_LOSs,
+        ndarray_of_PDF_values,
+        alpha = 0.2
+    )
 
-plt.xlabel("Time (days)")
-plt.ylabel("Derivative of Probability of discharge")
-plt.title("Derivative of Probability of Discharge vs Time (days)")
+plt.xlabel(xlabel = "Length Of Stay (days)")
+plt.ylabel(ylabel = "Probability Density Function Of LOS Vs. LOS")
+plt.title(label = "PDF Of LOS Vs. LOS")
 plt.show()
