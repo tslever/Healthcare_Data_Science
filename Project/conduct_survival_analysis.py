@@ -1,3 +1,5 @@
+# The following code predicts time until discharge from ICU occurs (i.e., Length Of Stay).
+
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
@@ -60,14 +62,14 @@ data_frame_for_testing[list_of_names_of_numerical_predictors] = data_frame_for_t
 data_frame_for_training[list_of_names_of_categorical_predictors] = data_frame_for_training[list_of_names_of_categorical_predictors].astype('category')
 data_frame_for_testing[list_of_names_of_categorical_predictors] = data_frame_for_testing[list_of_names_of_categorical_predictors].astype('category')
 
-data_frame_for_training['response'] = data_frame_for_training['los'].astype(float)
-data_frame_for_testing['response'] = data_frame_for_testing['los'].astype(float)
+data_frame_for_training['los'] = data_frame_for_training['los'].astype(float)
+data_frame_for_testing['los'] = data_frame_for_testing['los'].astype(float)
 
 data_frame_for_training['status'] = 1
 data_frame_for_testing['status'] = 1
 
-nd_array_of_tuples_of_true_event_indicators_and_LOSs_for_training = Surv.from_arrays(event = data_frame_for_training['status'] == 1, time=data_frame_for_training['response'])
-nd_array_of_tuples_of_true_event_indicators_and_LOSs_for_testing = Surv.from_arrays(event = data_frame_for_testing['status'] == 1, time=data_frame_for_testing['response'])
+nd_array_of_tuples_of_true_event_indicators_and_LOSs_for_training = Surv.from_arrays(event = data_frame_for_training['status'] == 1, time=data_frame_for_training['los'])
+nd_array_of_tuples_of_true_event_indicators_and_LOSs_for_testing = Surv.from_arrays(event = data_frame_for_testing['status'] == 1, time=data_frame_for_testing['los'])
 
 column_transformer = ColumnTransformer(
     transformers = [
@@ -100,10 +102,37 @@ list_of_step_functions = pipeline.predict_survival_function(
     data_frame_for_testing[list_of_names_of_predictors]
 )
 
+minimum_LOS = min(step_function.x[0] for step_function in list_of_step_functions)
+maximum_LOS = max(step_function.x[-1] for step_function in list_of_step_functions)
+ndarray_of_linearly_spaced_LOSs = np.linspace(
+    start = minimum_LOS,
+    stop = maximum_LOS,
+    num = 100
+)
+
 list_of_predicted_expected_LOSs = []
 for step_function in list_of_step_functions:
     predicted_expected_LOS = np.trapz(step_function.y, step_function.x)
     list_of_predicted_expected_LOSs.append(predicted_expected_LOS)
+
+list_of_predicted_expected_LOSs_via_PDF = []
+for step_function in list_of_step_functions:
+    ndarray_of_CDF_values = 1 - step_function.y
+    ndarray_of_interpolated_CDF_values = np.interp(
+        x = ndarray_of_linearly_spaced_LOSs,
+        xp = step_function.x,
+        fp = ndarray_of_CDF_values
+    )
+    ndarray_of_PDF_values = np.gradient(
+        ndarray_of_interpolated_CDF_values,
+        ndarray_of_linearly_spaced_LOSs
+    )
+    ndarray_of_PDF_values = np.maximum(ndarray_of_PDF_values, 0)
+    predicted_expected_LOS = np.trapz(
+        ndarray_of_linearly_spaced_LOSs * ndarray_of_PDF_values,
+        ndarray_of_linearly_spaced_LOSs
+    )
+    list_of_predicted_expected_LOSs_via_PDF.append(predicted_expected_LOS)
 
 data_frame_of_ids_and_actual_and_predicted_expected_LOSs = pd.DataFrame(
     data = {
@@ -111,21 +140,14 @@ data_frame_of_ids_and_actual_and_predicted_expected_LOSs = pd.DataFrame(
         'hadm_id': data_frame_for_testing['hadm_id'].values,
         'stay_id': data_frame_for_testing['stay_id'].values,
         'actual_los': data_frame_for_testing['los'].values,
-        'predicted_expected_los': list_of_predicted_expected_LOSs
+        'predicted_expected_los': list_of_predicted_expected_LOSs,
+        'predicted_expected_los_according_to_PDF': list_of_predicted_expected_LOSs_via_PDF
     }
 )
 
 data_frame_of_ids_and_actual_and_predicted_expected_LOSs.to_csv(
     path_or_buf = 'data_frame_of_ids_and_actual_and_predicted_expected_LOSs.csv',
     index = False
-)
-
-minimum_LOS = min(step_function.x[0] for step_function in list_of_step_functions)
-maximum_LOS = max(step_function.x[-1] for step_function in list_of_step_functions)
-ndarray_of_linearly_spaced_LOSs = np.linspace(
-    start = minimum_LOS,
-    stop = maximum_LOS,
-    num = 100
 )
 
 for step_function in list_of_step_functions:
