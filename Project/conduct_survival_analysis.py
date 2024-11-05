@@ -7,6 +7,8 @@ from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sksurv.ensemble import RandomSurvivalForest
 from sksurv.util import Surv
+from sklearn.metrics import mean_squared_error
+from sksurv.metrics import concordance_index_censored
 import matplotlib.pyplot as plt
 
 
@@ -80,8 +82,8 @@ data_frame_for_testing['los'] = data_frame_for_testing['los'].astype(float)
 data_frame_for_training['status'] = 1
 data_frame_for_testing['status'] = 1
 
-nd_array_of_tuples_of_true_event_indicators_and_LOSs_for_training = Surv.from_arrays(event = data_frame_for_training['status'] == 1, time=data_frame_for_training['los'])
-nd_array_of_tuples_of_true_event_indicators_and_LOSs_for_testing = Surv.from_arrays(event = data_frame_for_testing['status'] == 1, time=data_frame_for_testing['los'])
+nd_array_of_tuples_of_true_event_indicators_and_LOSs_for_training = Surv.from_arrays(event = data_frame_for_training['status'] == 1, time = data_frame_for_training['los'])
+nd_array_of_tuples_of_true_event_indicators_and_LOSs_for_testing = Surv.from_arrays(event = data_frame_for_testing['status'] == 1, time = data_frame_for_testing['los'])
 
 column_transformer = ColumnTransformer(
     transformers = [
@@ -97,7 +99,8 @@ pipeline = Pipeline(
             RandomSurvivalForest(
                 n_estimators = 100,
                 min_samples_split = 10,
-                random_state = 0
+                random_state = 0,
+                n_jobs = -1
             )
         )
     ]
@@ -110,25 +113,100 @@ pipeline.fit(
 
 # There is one step function of the from f(z) = y_i, x_i <= z < x_{i+1}
 # for each row in the testing data set.
-list_of_step_functions = pipeline.predict_survival_function(
+list_of_step_functions_for_training = pipeline.predict_survival_function(
+    data_frame_for_training[list_of_names_of_predictors]
+)
+
+list_of_step_functions_for_testing = pipeline.predict_survival_function(
     data_frame_for_testing[list_of_names_of_predictors]
 )
 
-minimum_LOS = min(step_function.x[0] for step_function in list_of_step_functions)
-maximum_LOS = max(step_function.x[-1] for step_function in list_of_step_functions)
+list_of_predicted_expected_LOSs_for_training = []
+for step_function in list_of_step_functions_for_training:
+    predicted_expected_LOS_for_training = np.trapz(step_function.y, step_function.x)
+    list_of_predicted_expected_LOSs_for_training.append(predicted_expected_LOS_for_training)
+
+list_of_predicted_expected_LOSs_for_testing = []
+for step_function in list_of_step_functions_for_testing:
+    predicted_expected_LOS = np.trapz(step_function.y, step_function.x)
+    list_of_predicted_expected_LOSs_for_testing.append(predicted_expected_LOS)
+
+mean_squared_error_for_training = mean_squared_error(
+    y_true = data_frame_for_training["los"].values,
+    y_pred = list_of_predicted_expected_LOSs_for_training
+)
+
+mean_squared_error_for_testing = mean_squared_error(
+    y_true = data_frame_for_testing["los"].values,
+    y_pred = list_of_predicted_expected_LOSs_for_testing
+)
+
+print(f"mean squared error for training: {mean_squared_error_for_training}")
+print(f"mean squared error for testing: {mean_squared_error_for_testing}")
+
+concordance_index_for_training = concordance_index_censored(
+    event_indicator = data_frame_for_training["status"] == 1,
+    event_time = data_frame_for_training["los"],
+    estimate = -np.array(list_of_predicted_expected_LOSs_for_training)
+)
+
+concordance_index_for_testing = concordance_index_censored(
+    event_indicator = data_frame_for_testing["status"] == 1,
+    event_time = data_frame_for_testing["los"],
+    estimate = -np.array(list_of_predicted_expected_LOSs_for_testing)
+)
+
+print(f"concordance index for training: {concordance_index_for_training}")
+print(f"concordance index for testing: {concordance_index_for_testing}")
+
+plt.scatter(
+    x = data_frame_for_training["los"].values,
+    y = list_of_predicted_expected_LOSs_for_training,
+    alpha = 0.1
+)
+plt.plot(
+    [data_frame_for_training["los"].min(), data_frame_for_training["los"].max()],
+    [data_frame_for_training["los"].min(), data_frame_for_training["los"].max()],
+    color = "red",
+    linestyle = "--",
+    label = "Ideal"
+)
+plt.xlabel("Observed LOS")
+plt.ylabel("Predicted Expected LOS")
+plt.title("Predicted Expected LOS Vs. Observed LOS For Training Data")
+plt.legend()
+plt.grid()
+plt.show()
+
+plt.scatter(
+    x = data_frame_for_testing["los"].values,
+    y = list_of_predicted_expected_LOSs_for_testing,
+    alpha = 0.1
+)
+plt.plot(
+    [data_frame_for_testing["los"].min(), data_frame_for_testing["los"].max()],
+    [data_frame_for_testing["los"].min(), data_frame_for_testing["los"].max()],
+    color = "red",
+    linestyle = "--",
+    label = "Ideal"
+)
+plt.xlabel("Observed LOS")
+plt.ylabel("Predicted Expected LOS")
+plt.title("Predicted Expected LOS Vs. Observed LOS For Testing Data")
+plt.legend()
+plt.grid()
+plt.show()
+
+minimum_LOS = min(step_function.x[0] for step_function in list_of_step_functions_for_testing)
+maximum_LOS = max(step_function.x[-1] for step_function in list_of_step_functions_for_testing)
 ndarray_of_linearly_spaced_LOSs = np.linspace(
     start = minimum_LOS,
     stop = maximum_LOS,
     num = 100
 )
 
-list_of_predicted_expected_LOSs = []
-for step_function in list_of_step_functions:
-    predicted_expected_LOS = np.trapz(step_function.y, step_function.x)
-    list_of_predicted_expected_LOSs.append(predicted_expected_LOS)
-
 list_of_predicted_expected_LOSs_via_PDF = []
-for step_function in list_of_step_functions:
+for step_function in list_of_step_functions_for_testing:
     ndarray_of_CDF_values = 1 - step_function.y
     ndarray_of_interpolated_CDF_values = np.interp(
         x = ndarray_of_linearly_spaced_LOSs,
@@ -151,7 +229,7 @@ data_frame_of_ids_and_actual_and_predicted_expected_LOSs = pd.DataFrame(
         'hadm_id': data_frame_for_testing['hadm_id'].values,
         'stay_id': data_frame_for_testing['stay_id'].values,
         'actual_los': data_frame_for_testing['los'].values,
-        'predicted_expected_los': list_of_predicted_expected_LOSs,
+        'predicted_expected_los': list_of_predicted_expected_LOSs_for_testing,
         'predicted_expected_los_according_to_PDF': list_of_predicted_expected_LOSs_via_PDF
     }
 )
@@ -162,7 +240,7 @@ data_frame_of_ids_and_actual_and_predicted_expected_LOSs.to_csv(
 )
 
 list_of_ndarrays_of_survival_curve_values = []
-for step_function in list_of_step_functions:
+for step_function in list_of_step_functions_for_testing:
     ndarray_of_interpolated_survival_curve_values = np.interp(
         x = ndarray_of_linearly_spaced_LOSs,
         xp = step_function.x,
@@ -193,7 +271,7 @@ plt.grid()
 plt.show()
 
 list_of_ndarrays_of_CDF_values = []
-for step_function in list_of_step_functions:
+for step_function in list_of_step_functions_for_testing:
     ndarray_of_CDF_values = 1 - step_function.y
     ndarray_of_interpolated_CDF_values = np.interp(
         x = ndarray_of_linearly_spaced_LOSs,
@@ -225,7 +303,7 @@ plt.grid()
 plt.show()
 
 list_of_ndarrays_of_PDF_values = []
-for step_function in list_of_step_functions:
+for step_function in list_of_step_functions_for_testing:
     ndarray_of_CDF_values = 1 - step_function.y
     ndarray_of_interpolated_CDF_values = np.interp(
         x = ndarray_of_linearly_spaced_LOSs,
