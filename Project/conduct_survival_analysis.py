@@ -27,6 +27,18 @@ data_frame = pd.read_csv(
 data_frame_for_training = data_frame.sample(frac = 0.8, random_state = 0)
 data_frame_for_testing = data_frame.drop(data_frame_for_training.index)
 
+plt.hist(
+    x = data_frame_for_testing["los"],
+    bins = 30,
+    edgecolor = "black",
+    alpha = 0.7
+)
+plt.xlabel("Length Of Stay (days)")
+plt.ylabel("Frequency")
+plt.title("Histogram Of Frequency Of LOS Vs. LOS For Testing Data")
+plt.grid()
+plt.show()
+
 list_of_names_of_all_columns = data_frame_for_training.columns.tolist()
 list_of_names_of_ids_and_response = ['subject_id', 'hadm_id', 'stay_id', 'los']
 list_of_names_of_predictors = [
