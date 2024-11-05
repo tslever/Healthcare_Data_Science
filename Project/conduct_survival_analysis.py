@@ -149,24 +149,38 @@ data_frame_of_ids_and_actual_and_predicted_expected_LOSs.to_csv(
     index = False
 )
 
+list_of_ndarrays_of_survival_curve_values = []
 for step_function in list_of_step_functions:
     ndarray_of_interpolated_survival_curve_values = np.interp(
         x = ndarray_of_linearly_spaced_LOSs,
         xp = step_function.x,
         fp = step_function.y
     )
+    list_of_ndarrays_of_survival_curve_values.append(ndarray_of_interpolated_survival_curve_values)
     plt.step(
         x = ndarray_of_linearly_spaced_LOSs,
         y = ndarray_of_interpolated_survival_curve_values,
         where = "post",
         alpha = 0.2
     )
-
+ndarray_of_ndarrays_of_survival_curve_values = np.array(list_of_ndarrays_of_survival_curve_values)
+ndarray_array_of_average_survival_curve_values = np.mean(ndarray_of_ndarrays_of_survival_curve_values, axis = 0)
+plt.step(
+    x = ndarray_of_linearly_spaced_LOSs,
+    y = ndarray_array_of_average_survival_curve_values,
+    where = "post",
+    linewidth = 2,
+    color = "blue",
+    label = "Average"
+)
 plt.xlabel(xlabel = "Length Of Stay (days)")
 plt.ylabel(ylabel = "Survival Curve For Test Data")
 plt.title(label = "Survival Curves for Test Data")
+plt.legend()
+plt.grid()
 plt.show()
 
+list_of_ndarrays_of_CDF_values = []
 for step_function in list_of_step_functions:
     ndarray_of_CDF_values = 1 - step_function.y
     ndarray_of_interpolated_CDF_values = np.interp(
@@ -174,18 +188,31 @@ for step_function in list_of_step_functions:
         xp = step_function.x,
         fp = ndarray_of_CDF_values
     )
+    list_of_ndarrays_of_CDF_values.append(ndarray_of_interpolated_CDF_values)
     plt.step(
         x = ndarray_of_linearly_spaced_LOSs,
         y = ndarray_of_interpolated_CDF_values,
         where = "post",
         alpha = 0.2
     )
-
+ndarray_of_ndarrays_of_CDF_values = np.array(list_of_ndarrays_of_CDF_values)
+ndarray_of_average_CDF_values = np.mean(ndarray_of_ndarrays_of_CDF_values, axis = 0)
+plt.step(
+    x = ndarray_of_linearly_spaced_LOSs,
+    y = ndarray_of_average_CDF_values,
+    where = "post",
+    linewidth = 2,
+    color = "blue",
+    label = "Average"
+)
 plt.xlabel(xlabel = "Length Of Stay (days)")
 plt.ylabel(ylabel = "Cumulative Distribution Function Of LOS")
-plt.title(label = "CDF Of LOS Vs. LOS")
+plt.title(label = "CDF Of LOS Vs. LOS For Test Data")
+plt.legend()
+plt.grid()
 plt.show()
 
+list_of_ndarrays_of_PDF_values = []
 for step_function in list_of_step_functions:
     ndarray_of_CDF_values = 1 - step_function.y
     ndarray_of_interpolated_CDF_values = np.interp(
@@ -197,13 +224,24 @@ for step_function in list_of_step_functions:
         ndarray_of_interpolated_CDF_values,
         ndarray_of_linearly_spaced_LOSs
     )
+    list_of_ndarrays_of_PDF_values.append(ndarray_of_PDF_values)
     plt.plot(
         ndarray_of_linearly_spaced_LOSs,
         ndarray_of_PDF_values,
         alpha = 0.2
     )
-
+ndarray_of_ndarrays_of_PDF_values = np.array(list_of_ndarrays_of_PDF_values)
+ndarray_of_average_PDF_values = np.mean(ndarray_of_ndarrays_of_PDF_values, axis = 0)
+plt.plot(
+    ndarray_of_linearly_spaced_LOSs,
+    ndarray_of_average_PDF_values,
+    linewidth = 2,
+    color = "blue",
+    label = "Average"
+)
 plt.xlabel(xlabel = "Length Of Stay (days)")
 plt.ylabel(ylabel = "Probability Density Function Of LOS Vs. LOS")
-plt.title(label = "PDF Of LOS Vs. LOS")
+plt.title(label = "PDF Of LOS Vs. LOS For Test Data")
+plt.legend()
+plt.grid()
 plt.show()
