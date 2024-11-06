@@ -9,6 +9,7 @@ from sklearn.metrics import mean_squared_error
 from sksurv.metrics import concordance_index_censored
 import matplotlib.pyplot as plt
 from sklearn.model_selection import KFold
+import os
 
 # Load data
 data_frame = pd.read_csv(
@@ -91,20 +92,40 @@ column_transformer = ColumnTransformer(
     ]
 )
 
+n_estimators = 100
+max_depth = None
+min_samples_split = 6
+min_samples_leaf = 3
+max_features = None
+
 pipeline = Pipeline(
     steps=[
         ("step_transform_columns", column_transformer),
         (
             "step_classify",
             RandomSurvivalForest(
-                n_estimators=100,
-                min_samples_split=10,
-                random_state=0,
-                n_jobs=-1,
+                n_estimators = n_estimators, # More trees can improve performance by reducing variance. Ranges from 100 to 1000.
+                max_depth = max_depth, # Limits depth of trees to prevent overfitting. Ranges from 5 to 50.
+                min_samples_split = min_samples_split, # Prevents splitting nodes with too few samples, which can help reduce overfitting. Ranges from 2 to 10.
+                min_samples_leaf = min_samples_leaf, # Ensures that leaf nodes have a minimum number of samples, which can help reduce overfitting and help handle censoring. Ranges from 1 to 10.
+                min_weight_fraction_leaf = 0,
+                max_features = max_features, # Introduces randomness by considering a subset of features for splitting, which is crucial for reducing correlation between trees and improving generalization. Ranges among "sqrt" of the number of features, "log2" of the number of features, 0.0 to 1.0 (e.g., 0.3, 0.5) of the number of features, and an integer number of features.
+                max_leaf_nodes = None,
+                bootstrap = True,
+                oob_score = False,
+                n_jobs = -1,
+                random_state = 0,
+                verbose = 1,
+                warm_start = False,
+                max_samples = None,
+                low_memory = False
             ),
         ),
     ]
 )
+
+path = f"Visualizations_Of_Performance/{n_estimators}_{max_depth}_{min_samples_split}_{min_samples_leaf}_{max_features}"
+os.makedirs(path)
 
 # Set up cross-validation
 kf = KFold(n_splits=5, shuffle=True, random_state=0)
@@ -142,7 +163,7 @@ for train_index, test_index in kf.split(X):
 
     # Compute predicted expected LOS for each sample in X_test
     for step_function in step_functions:
-        predicted_expected_LOS = np.trapz(step_function.y, step_function.x)
+        predicted_expected_LOS = np.trapezoid(step_function.y, step_function.x)
         list_of_predicted_expected_LOSs.append(predicted_expected_LOS)
 
     # Collect true LOS values
@@ -191,7 +212,8 @@ plt.ylabel("Predicted Expected LOS")
 plt.title("Predicted Expected LOS Vs. Observed LOS")
 plt.legend()
 plt.grid()
-plt.show()
+plt.savefig(fname = f"{path}/Predicted_Expected_LOS_Vs_Observed_LOS.png")
+plt.clf()
 
 # Generate and plot survival curves
 minimum_LOS = min(step_function.x[0] for step_function in list_of_step_functions)
@@ -233,7 +255,8 @@ plt.ylabel("Survival Curve")
 plt.title("Survival Curves")
 plt.legend()
 plt.grid()
-plt.show()
+plt.savefig(fname = f"{path}/Survival_Curves.png")
+plt.clf()
 
 # Generate and plot CDF of LOS
 list_of_ndarrays_of_CDF_values = []
@@ -264,7 +287,8 @@ plt.ylabel("Cumulative Distribution Function")
 plt.title("CDF of LOS Vs. LOS")
 plt.legend()
 plt.grid()
-plt.show()
+plt.savefig(fname = f"{path}/CDF_Of_LOS_Vs_LOS.png")
+plt.clf()
 
 # Generate and plot PDF of LOS
 list_of_ndarrays_of_PDF_values = []
@@ -284,7 +308,7 @@ for step_function in list_of_step_functions:
         alpha=0.2,
     )
     # Compute predicted expected LOS via PDF
-    predicted_expected_LOS = np.trapz(
+    predicted_expected_LOS = np.trapezoid(
         ndarray_of_linearly_spaced_LOSs * ndarray_of_PDF_values,
         ndarray_of_linearly_spaced_LOSs,
     )
@@ -303,7 +327,8 @@ plt.ylabel("Probability Density Function")
 plt.title("PDF of LOS Vs. LOS")
 plt.legend()
 plt.grid()
-plt.show()
+plt.savefig(fname = f"{path}/PDF_Of_LOS_Vs_LOS.png")
+plt.clf()
 
 # Create DataFrame of results
 data_frame_of_ids_and_actual_and_predicted_expected_LOSs = pd.DataFrame(
@@ -368,17 +393,19 @@ plt.grid()
 plt.legend()
 number_of_observations = len(data_frame_of_ids_and_actual_and_predicted_expected_LOSs)
 name_of_model = 'Random Survival Forest'
-plt.title(
-    f'Cumulative Relative Frequency Of Positive Indicators\n'
-    f'That Observed Response Value Is Below Threshold Determined By z Score\n'
-    f'Vs. Index In Data Frame Of {number_of_observations} Indicators\n'
-    f'Sorted By Average Of Predicted Response Values\n'
-    f'For {name_of_model}',
-    fontsize=10
-)
+plt.title(f"Gains Curve")
+#plt.title(
+#    f'Cumulative Relative Frequency Of Positive Indicators\n'
+#    f'That Observed Response Value Is Below Threshold Determined By z Score\n'
+#    f'Vs. Index In Data Frame Of {number_of_observations} Indicators\n'
+#    f'Sorted By Average Of Predicted Response Values\n'
+#    f'For {name_of_model}',
+#    fontsize=10
+#)
 plt.xlabel('Index')
 plt.ylabel('Cumulative Relative Frequency')
-plt.show()
+plt.savefig(fname = f"{path}/Gains_Curves.png")
+plt.clf()
 
 plt.hist(
     x = data_frame["los"],
@@ -390,4 +417,5 @@ plt.xlabel("Length Of Stay (days)")
 plt.ylabel("Frequency")
 plt.title("Histogram Of Frequency Of LOS Vs. LOS")
 plt.grid()
-plt.show()
+plt.savefig(fname = f"{path}/Histogram_Of_Frequency_Of_LOS_Vs_LOS.png")
+plt.clf()

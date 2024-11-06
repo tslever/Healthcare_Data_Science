@@ -5,6 +5,7 @@
 9--Survival_Analysis/env
 Project/*.csv
 Project/__pycache__
+Project/Visualizations_Of_Performance
 Project/database.db
 Project/env
 Project/mimic-iv-3.0
