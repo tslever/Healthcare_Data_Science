@@ -1,7 +1,7 @@
 '''
 Plot_Gains_Curve.py
 
-Plot a Gains Curve / Enrichment-Factor Curve given the name of a model and a data frame of observed response values and averages of response values predicted by the model
+Plot a Gains Curve / Enrichment-Factor Curve given the name of a model and a data frame of observed response values and predicted expected values by the model
 '''
 
 import argparse
@@ -11,8 +11,6 @@ import pandas as pd
 
 def main(name_of_model, number_of_training_or_testing_observations, path_to_data_frame):
     dictionary_of_numbers_of_standard_deviations_below_mean_and_colors = {
-        #-0.125: 'red',
-        #-0.25: 'green',
         -0.65: 'blue'
     }
     data_frame_of_observed_response_values_and_average_of_predicted_response_values = pd.read_csv(path_to_data_frame)[['actual_los', 'predicted_expected_los']]
