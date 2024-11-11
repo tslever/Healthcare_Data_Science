@@ -10,6 +10,7 @@ from sksurv.metrics import concordance_index_censored
 import matplotlib.pyplot as plt
 from sklearn.model_selection import KFold
 import os
+from sklearn.inspection import permutation_importance
 
 # Load data
 data_frame = pd.read_csv(
@@ -104,28 +105,28 @@ pipeline = Pipeline(
         (
             "step_classify",
             RandomSurvivalForest(
-                n_estimators = n_estimators, # More trees can improve performance by reducing variance. Ranges from 100 to 1000.
-                max_depth = max_depth, # Limits depth of trees to prevent overfitting. Ranges from 5 to 50.
-                min_samples_split = min_samples_split, # Prevents splitting nodes with too few samples, which can help reduce overfitting. Ranges from 2 to 10.
-                min_samples_leaf = min_samples_leaf, # Ensures that leaf nodes have a minimum number of samples, which can help reduce overfitting and help handle censoring. Ranges from 1 to 10.
-                min_weight_fraction_leaf = 0,
-                max_features = max_features, # Introduces randomness by considering a subset of features for splitting, which is crucial for reducing correlation between trees and improving generalization. Ranges among "sqrt" of the number of features, "log2" of the number of features, 0.0 to 1.0 (e.g., 0.3, 0.5) of the number of features, and an integer number of features.
-                max_leaf_nodes = None,
-                bootstrap = True,
-                oob_score = False,
-                n_jobs = -1,
-                random_state = 0,
-                verbose = 1,
-                warm_start = False,
-                max_samples = None,
-                low_memory = False
+                n_estimators=n_estimators,
+                max_depth=max_depth,
+                min_samples_split=min_samples_split,
+                min_samples_leaf=min_samples_leaf,
+                min_weight_fraction_leaf=0,
+                max_features=max_features,
+                max_leaf_nodes=None,
+                bootstrap=True,
+                oob_score=False,
+                n_jobs=-1,
+                random_state=0,
+                verbose=1,
+                warm_start=False,
+                max_samples=None,
+                low_memory=False,
             ),
         ),
     ]
 )
 
 path = f"Visualizations_Of_Performance/{n_estimators}_{max_depth}_{min_samples_split}_{min_samples_leaf}_{max_features}"
-os.makedirs(path)
+os.makedirs(path, exist_ok=True)
 
 # Set up cross-validation
 kf = KFold(n_splits=5, shuffle=True, random_state=0)
@@ -138,6 +139,20 @@ list_of_step_functions = []
 list_of_subject_ids = []
 list_of_hadm_ids = []
 list_of_stay_ids = []
+
+# Initialize a dictionary to collect feature importances
+from collections import defaultdict
+
+feature_importances_dict = defaultdict(float)
+num_folds = 0
+
+# Function to compute the scoring metric
+def score_model(model, X, y):
+    # Predict the risk scores
+    risk_scores = model.predict(X)
+    # Compute the concordance index
+    ci = concordance_index_censored(y['event'], y['time'], risk_scores)[0]
+    return ci
 
 # Cross-validation loop
 for train_index, test_index in kf.split(X):
@@ -163,7 +178,7 @@ for train_index, test_index in kf.split(X):
 
     # Compute predicted expected LOS for each sample in X_test
     for step_function in step_functions:
-        predicted_expected_LOS = np.trapezoid(step_function.y, step_function.x)
+        predicted_expected_LOS = np.trapz(step_function.y, step_function.x)
         list_of_predicted_expected_LOSs.append(predicted_expected_LOS)
 
     # Collect true LOS values
@@ -181,6 +196,75 @@ for train_index, test_index in kf.split(X):
     list_of_subject_ids.extend(subject_ids)
     list_of_hadm_ids.extend(hadm_ids)
     list_of_stay_ids.extend(stay_ids)
+
+    # Compute permutation importance
+    X_test_transformed = pipeline.named_steps["step_transform_columns"].transform(X_test)
+    result = permutation_importance(
+        pipeline.named_steps["step_classify"],
+        X_test_transformed,
+        y_test,
+        n_repeats=5,
+        random_state=0,
+        scoring=score_model,
+    )
+
+    feature_names = pipeline.named_steps[
+        "step_transform_columns"
+    ].get_feature_names_out()
+
+    # Map feature importances to original feature names
+    per_fold_feature_importances = defaultdict(float)
+    for name, importance in zip(feature_names, result.importances_mean):
+        transformer_name, feature = name.split("__", 1)
+        if transformer_name == "transformer_of_columns_with_numerical_values":
+            # For numerical features
+            original_feature_name = feature
+        elif transformer_name == "transformer_of_columns_with_categorical_values":
+            # For categorical features, e.g., 'gender_Male'
+            original_feature_name = feature.split("_", 1)[0]
+        else:
+            original_feature_name = feature  # default case
+
+        # Sum the importance for the original feature
+        per_fold_feature_importances[original_feature_name] += importance
+
+    # Add per_fold_feature_importances to the overall feature_importances_dict
+    for feature_name, importance in per_fold_feature_importances.items():
+        feature_importances_dict[feature_name] += importance
+
+    num_folds += 1
+
+# Average the feature importances over folds
+for feature_name in feature_importances_dict:
+    feature_importances_dict[feature_name] /= num_folds
+
+# Convert the feature_importances_dict to a pandas DataFrame
+feature_importances_df = pd.DataFrame(
+    {
+        "feature": list(feature_importances_dict.keys()),
+        "importance": list(feature_importances_dict.values()),
+    }
+)
+
+# Sort by importance
+feature_importances_df = feature_importances_df.sort_values(
+    by="importance", ascending=False
+)
+
+# Plot the feature importances
+plt.figure(figsize=(10, 8))
+plt.barh(
+    y=feature_importances_df["feature"],
+    width=feature_importances_df["importance"],
+    color="skyblue",
+)
+plt.gca().invert_yaxis()  # To display the highest importance at the top
+plt.xlabel("Average Permutation Importance")
+plt.ylabel("Feature")
+plt.title("Feature Importances")
+plt.tight_layout()
+plt.savefig(fname=f"{path}/Feature_Importances.png")
+plt.close()
 
 # Compute overall mean squared error
 mean_squared_error_overall = mean_squared_error(
@@ -212,7 +296,7 @@ plt.ylabel("Predicted Expected LOS")
 plt.title("Predicted Expected LOS Vs. Observed LOS")
 plt.legend()
 plt.grid()
-plt.savefig(fname = f"{path}/Predicted_Expected_LOS_Vs_Observed_LOS.png")
+plt.savefig(fname=f"{path}/Predicted_Expected_LOS_Vs_Observed_LOS.png")
 plt.clf()
 
 # Generate and plot survival curves
@@ -255,7 +339,7 @@ plt.ylabel("Survival Curve")
 plt.title("Survival Curves")
 plt.legend()
 plt.grid()
-plt.savefig(fname = f"{path}/Survival_Curves.png")
+plt.savefig(fname=f"{path}/Survival_Curves.png")
 plt.clf()
 
 # Generate and plot CDF of LOS
@@ -263,7 +347,9 @@ list_of_ndarrays_of_CDF_values = []
 for step_function in list_of_step_functions:
     ndarray_of_CDF_values = 1 - step_function.y
     ndarray_of_interpolated_CDF_values = np.interp(
-        x=ndarray_of_linearly_spaced_LOSs, xp=step_function.x, fp=ndarray_of_CDF_values
+        x=ndarray_of_linearly_spaced_LOSs,
+        xp=step_function.x,
+        fp=ndarray_of_CDF_values,
     )
     list_of_ndarrays_of_CDF_values.append(ndarray_of_interpolated_CDF_values)
     plt.step(
@@ -287,7 +373,7 @@ plt.ylabel("Cumulative Distribution Function")
 plt.title("CDF of LOS Vs. LOS")
 plt.legend()
 plt.grid()
-plt.savefig(fname = f"{path}/CDF_Of_LOS_Vs_LOS.png")
+plt.savefig(fname=f"{path}/CDF_Of_LOS_Vs_LOS.png")
 plt.clf()
 
 # Generate and plot PDF of LOS
@@ -296,7 +382,9 @@ list_of_predicted_expected_LOSs_via_PDF = []
 for step_function in list_of_step_functions:
     ndarray_of_CDF_values = 1 - step_function.y
     ndarray_of_interpolated_CDF_values = np.interp(
-        x=ndarray_of_linearly_spaced_LOSs, xp=step_function.x, fp=ndarray_of_CDF_values
+        x=ndarray_of_linearly_spaced_LOSs,
+        xp=step_function.x,
+        fp=ndarray_of_CDF_values,
     )
     ndarray_of_PDF_values = np.gradient(
         ndarray_of_interpolated_CDF_values, ndarray_of_linearly_spaced_LOSs
@@ -308,7 +396,7 @@ for step_function in list_of_step_functions:
         alpha=0.2,
     )
     # Compute predicted expected LOS via PDF
-    predicted_expected_LOS = np.trapezoid(
+    predicted_expected_LOS = np.trapz(
         ndarray_of_linearly_spaced_LOSs * ndarray_of_PDF_values,
         ndarray_of_linearly_spaced_LOSs,
     )
@@ -327,7 +415,7 @@ plt.ylabel("Probability Density Function")
 plt.title("PDF of LOS Vs. LOS")
 plt.legend()
 plt.grid()
-plt.savefig(fname = f"{path}/PDF_Of_LOS_Vs_LOS.png")
+plt.savefig(fname=f"{path}/PDF_Of_LOS_Vs_LOS.png")
 plt.clf()
 
 # Create DataFrame of results
@@ -343,79 +431,85 @@ data_frame_of_ids_and_actual_and_predicted_expected_LOSs = pd.DataFrame(
 )
 
 data_frame_of_ids_and_actual_and_predicted_expected_LOSs.to_csv(
-    path_or_buf="data_frame_of_ids_and_actual_and_predicted_expected_LOSs.csv", index=False
+    path_or_buf="data_frame_of_ids_and_actual_and_predicted_expected_LOSs.csv",
+    index=False,
 )
 
 # Add code to plot Gains Curve
 # Compute threshold based on z-score
-mean_los = data_frame_of_ids_and_actual_and_predicted_expected_LOSs['actual_los'].mean()
-std_los = data_frame_of_ids_and_actual_and_predicted_expected_LOSs['actual_los'].std()
+mean_los = data_frame_of_ids_and_actual_and_predicted_expected_LOSs["actual_los"].mean()
+std_los = data_frame_of_ids_and_actual_and_predicted_expected_LOSs["actual_los"].std()
 z_score = -0.64  # Adjust as needed
 threshold = mean_los + z_score * std_los
 
 # Add indicator column
-data_frame_of_ids_and_actual_and_predicted_expected_LOSs['indicator_below_threshold'] = (
-    data_frame_of_ids_and_actual_and_predicted_expected_LOSs['actual_los'] < threshold
+data_frame_of_ids_and_actual_and_predicted_expected_LOSs[
+    "indicator_below_threshold"
+] = (
+    data_frame_of_ids_and_actual_and_predicted_expected_LOSs["actual_los"] < threshold
 ).astype(int)
 
 # Perfect model
 df_perfect = data_frame_of_ids_and_actual_and_predicted_expected_LOSs[
-    ['actual_los', 'indicator_below_threshold']
+    ["actual_los", "indicator_below_threshold"]
 ].copy()
-df_perfect = df_perfect.sort_values(by='actual_los')
+df_perfect = df_perfect.sort_values(by="actual_los")
 df_perfect.reset_index(drop=True, inplace=True)
-df_perfect['cumulative_positive_indicators'] = df_perfect['indicator_below_threshold'].cumsum()
-df_perfect['cumulative_relative_frequency'] = df_perfect['cumulative_positive_indicators'] / df_perfect['indicator_below_threshold'].sum()
+df_perfect["cumulative_positive_indicators"] = df_perfect[
+    "indicator_below_threshold"
+].cumsum()
+df_perfect["cumulative_relative_frequency"] = (
+    df_perfect["cumulative_positive_indicators"]
+    / df_perfect["indicator_below_threshold"].sum()
+)
 
 # Trained model
 df_trained = data_frame_of_ids_and_actual_and_predicted_expected_LOSs[
-    ['predicted_expected_los', 'indicator_below_threshold']
+    ["predicted_expected_los", "indicator_below_threshold"]
 ].copy()
-df_trained = df_trained.sort_values(by='predicted_expected_los')
+df_trained = df_trained.sort_values(by="predicted_expected_los")
 df_trained.reset_index(drop=True, inplace=True)
-df_trained['cumulative_positive_indicators'] = df_trained['indicator_below_threshold'].cumsum()
-df_trained['cumulative_relative_frequency'] = df_trained['cumulative_positive_indicators'] / df_trained['indicator_below_threshold'].sum()
+df_trained["cumulative_positive_indicators"] = df_trained[
+    "indicator_below_threshold"
+].cumsum()
+df_trained["cumulative_relative_frequency"] = (
+    df_trained["cumulative_positive_indicators"]
+    / df_trained["indicator_below_threshold"].sum()
+)
 
 # Plot Gains Curve
 plt.plot(
     df_perfect.index,
-    df_perfect['cumulative_relative_frequency'],
-    label=f'Perfect Model; z score = {z_score}',
-    color='blue'
+    df_perfect["cumulative_relative_frequency"],
+    label=f"Perfect Model; z score = {z_score}",
+    color="blue",
 )
 plt.plot(
     df_trained.index,
-    df_trained['cumulative_relative_frequency'],
-    label=f'Trained Model; z score = {z_score}',
-    color='green'
+    df_trained["cumulative_relative_frequency"],
+    label=f"Trained Model; z score = {z_score}",
+    color="green",
 )
 plt.grid()
 plt.legend()
-number_of_observations = len(data_frame_of_ids_and_actual_and_predicted_expected_LOSs)
-name_of_model = 'Random Survival Forest'
+number_of_observations = len(
+    data_frame_of_ids_and_actual_and_predicted_expected_LOSs
+)
 plt.title(f"Gains Curve")
-#plt.title(
-#    f'Cumulative Relative Frequency Of Positive Indicators\n'
-#    f'That Observed Response Value Is Below Threshold Determined By z Score\n'
-#    f'Vs. Index In Data Frame Of {number_of_observations} Indicators\n'
-#    f'Sorted By Average Of Predicted Response Values\n'
-#    f'For {name_of_model}',
-#    fontsize=10
-#)
-plt.xlabel('Index')
-plt.ylabel('Cumulative Relative Frequency')
-plt.savefig(fname = f"{path}/Gains_Curves.png")
+plt.xlabel("Index")
+plt.ylabel("Cumulative Relative Frequency")
+plt.savefig(fname=f"{path}/Gains_Curves.png")
 plt.clf()
 
 plt.hist(
-    x = data_frame["los"],
-    bins = 30,
-    edgecolor = "black",
-    alpha = 0.7
+    x=data_frame["los"],
+    bins=30,
+    edgecolor="black",
+    alpha=0.7,
 )
 plt.xlabel("Length Of Stay (days)")
 plt.ylabel("Frequency")
 plt.title("Histogram Of Frequency Of LOS Vs. LOS")
 plt.grid()
-plt.savefig(fname = f"{path}/Histogram_Of_Frequency_Of_LOS_Vs_LOS.png")
+plt.savefig(fname=f"{path}/Histogram_Of_Frequency_Of_LOS_Vs_LOS.png")
 plt.clf()
